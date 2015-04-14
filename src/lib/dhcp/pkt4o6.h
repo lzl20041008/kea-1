@@ -68,6 +68,9 @@ public:
     ///
     /// @return pkt6 pointer to a new DHCPv4-query message
     Pkt6Ptr toPkt6();
+
+    //For leasequery
+    Pkt6Ptr toPkt6Leasequery();
     
     /// @brief Sets flags field in DHCPv4-query message
     ///

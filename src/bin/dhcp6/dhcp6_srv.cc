@@ -158,6 +158,9 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
             ->cfg_iface_.setFamily(CfgIface::V6);
 
         /// @todo call loadLibraries() when handling configuration changes
+
+        //init leasequery
+        initLeasequery();
         
     } catch (const std::exception &e) {
         LOG_ERROR(dhcp6_logger, DHCP6_SRV_CONSTRUCT_ERROR).arg(e.what());
@@ -2480,7 +2483,54 @@ Dhcpv6Srv::processDHCPv4Response(const Pkt6Ptr& query) {
     if (!query->relay_info_.empty()) {
         reply->copyRelayInfo(query);
     }
+
+    processLeaseQuery(reply);
+
     return reply;
+}
+
+void
+Dhcpv6Srv::sendToRequestor(const char *buf, int len)
+{
+    for (int i = leasequeryRequestorList.size() - 1; i >= 0; --i) {
+        int count = write(leasequeryRequestorList[i], buf, len);
+        if (count <= 0)
+            leasequeryRequestorList.erase(leasequeryRequestorList.begin() + i);
+    }
+}
+
+void
+Dhcpv6Srv::processLeaseQuery(const Pkt6Ptr& reply) {
+    Pkt4o6Ptr pkt4o6 = Pkt4o6::fromPkt6(reply);
+    pkt4o6->Pkt4::unpack();
+
+    if (pkt4o6) {
+        if (pkt4o6->getType() == DHCPACK) {
+            try {
+                pkt4o6->delOption(DHO_DHCP_MESSAGE_TYPE);
+                pkt4o6->setType(DHCPLEASEACTIVE);
+            } catch (const Exception &e) {
+                cout<<"catch#1"<<e.what()<<endl;
+            }
+
+            Pkt6Ptr pkt6;
+            
+            try{
+                pkt6 = pkt4o6->toPkt6Leasequery();
+                pkt6->setType(LEASEQUERY_DATA);
+            } catch (const Exception &e) {
+                cout<<"catch#2"<<e.what()<<endl;
+            }
+
+            try {
+                pkt6->pack();
+                const isc::util::OutputBuffer& buf = pkt6->getBuffer();
+                sendToRequestor((const char*)buf.getData(), buf.getLength());
+            } catch (const Exception &e) {
+                cout<<"catch#3"<<e.what()<<endl;
+            }
+        }
+    }
 }
 
 
@@ -2723,6 +2773,45 @@ Dhcpv6Srv::d2ClientErrorHandler(const
     /// @todo We may wish to revisit this, but for now we will simpy turn
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
+}
+
+void
+Dhcpv6Srv::initLeasequery()
+{
+    int fd;
+    if ((fd = socket(AF_INET6, SOCK_STREAM, 0)) < 0) {
+        fprintf(stderr, "initLeasequery: Failed to create socket: %m\n");
+        exit(1);
+    }
+//    int no = 0;
+    int yes = 1;
+//    setsockopt(fd, IPPROTO_IPV6, IPV6_V6ONLY, &no, sizeof(no));
+    setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &yes, sizeof(yes));
+    
+    struct sockaddr_in6 serv_addr;
+    bzero((char *) &serv_addr, sizeof(serv_addr));
+    serv_addr.sin6_family = AF_INET6;
+    serv_addr.sin6_addr = in6addr_any;
+    serv_addr.sin6_port = htons(547);
+    if (bind(fd, (struct sockaddr *) &serv_addr, sizeof(serv_addr)) == -1)  {
+        perror("initLeasequery: error in bind()");
+        exit(0);
+    }
+
+    if (listen(fd, 1000) != 0)  {
+        perror("initLeasequery: error in listen()");
+        exit(0);
+    }
+    leasequery_fd = fd;
+    IfaceMgr::instance().addExternalSocket(fd,
+                                boost::bind(&Dhcpv6Srv::handleLeasequeryConnection, this));
+}
+
+void
+Dhcpv6Srv::handleLeasequeryConnection()
+{
+    int fd = accept(leasequery_fd, NULL, NULL);
+    leasequeryRequestorList.push_back(fd);
 }
 
 std::string

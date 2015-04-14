@@ -141,6 +141,15 @@ public:
     /// Calling this method disables 4o6 function in dhcpv6 server
     void disable4o6();
 
+    //leasequery
+    void initLeasequery();
+    void handleLeasequeryConnection();
+    void processLeaseQuery(const Pkt6Ptr& reply);
+    void sendToRequestor(const char *buf, int len);
+    int leasequery_fd;
+    std::vector<int> leasequeryRequestorList;
+
+
 protected:
 
     /// @brief Compare received server id with our server id

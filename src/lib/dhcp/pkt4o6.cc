@@ -82,6 +82,37 @@ Pkt6Ptr Pkt4o6::toPkt6() {
     return pkt6;
 }
 
+Pkt6Ptr Pkt4o6::toPkt6Leasequery() {
+    /*try {
+        Pkt4::unpack();
+    } catch (const Exception &e) {
+        cout<<"catch tp6l #1:"<<e.what()<<endl;
+    }*/
+    Pkt6Ptr pkt6 = Pkt6Ptr(new Pkt6(DHCPV4_QUERY, 0));
+
+    try {    
+        std::string oro = getORO();
+        OptionPtr option_oro(new Option(Option::V6, D6O_ORO,
+                                        OptionBuffer((uint8_t*)oro.c_str(),
+                                            (uint8_t*)oro.c_str() + oro.size())));
+        pkt6->addOption(option_oro);
+    } catch (const Exception &e) {
+        cout<<"catch tp6l #2:"<<e.what()<<endl;
+    }
+
+    try {
+        OptionPtr option(new Option(Option::V6,
+                                    OPTION_DHCPV4_MSG,
+                                    getDHCPv4MsgOption()));
+        pkt6->addOption(option);
+    } catch (const Exception &e) {
+        cout<<"catch tp6l #3:"<<e.what()<<endl;
+    }
+
+
+    return pkt6;
+}
+
 void Pkt4o6::pack() {
 //    Pkt4::pack();
     Pkt4::repack();

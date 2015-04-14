@@ -110,6 +110,9 @@
 #define DHCPV4_QUERY              20
 #define DHCPV4_RESPONSE           21
 
+/* For DHCP4o6 lease query */
+#define LEASEQUERY_DATA           17
+
 extern const char *dhcpv6_type_names[];
 extern const int dhcpv6_type_name_max;
 
